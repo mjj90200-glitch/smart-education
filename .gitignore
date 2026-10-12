@@ -1,0 +1,35 @@
+# Docker 部署相关
+.env
+docker-compose.yml
+Dockerfile
+.dockerignore
+deploy.sh
+deploy.bat
+
+# MySQL 数据目录
+mysql/
+
+# 上传文件目录
+uploads/
+
+# 构建产物
+smartedu-backend/target/
+smartedu-ui/dist/
+
+# IDE
+.idea/
+*.iml
+.vscode/
+
+# 依赖
+node_modules/
+
+# 日志
+*.log
+
+# 系统文件
+.DS_Store
+Thumbs.db
+
+# 临时文件
+tmp/

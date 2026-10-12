@@ -1,0 +1,162 @@
+# ============================================================
+# SmartEdu-Platform 智慧教育平台 - 后端配置文件
+# ============================================================
+
+server:
+  port: 8080
+  servlet:
+    context-path: /api
+
+spring:
+  application:
+    name: SmartEdu-Platform
+  main:
+    allow-bean-definition-overriding: true
+    lazy-initialization: true
+  ai:
+    openai:
+      api-key: ${AI_API_KEY:}
+      base-url: ${AI_BASE_URL:https://ark.cn-beijing.volces.com/api/coding/v3}
+      # 确保添加此配置
+      enabled: true
+      # 连接超时设置
+      timeout: 30000
+      chat:
+        options:
+          model: ${AI_MODEL:doubao-seed-2.0-pro}
+          temperature: 0.7
+      # 禁用不需要的功能
+      audio:
+        enabled: false
+      embedding:
+        enabled: false
+
+  # 文件上传配置
+  servlet:
+    multipart:
+      # 最大文件大小
+      max-file-size: 50MB
+      # 最大请求大小
+      max-request-size: 50MB
+      # 文件大小阈值，超过此值会写入临时文件
+      file-size-threshold: 2MB
+
+  # MySQL 数据源配置
+  datasource:
+    driver-class-name: com.mysql.cj.jdbc.Driver
+    url: ${SPRING_DATASOURCE_URL:jdbc:mysql://localhost:3306/smartedu_platform?useUnicode=true&characterEncoding=utf8&useSSL=false&serverTimezone=Asia/Shanghai&allowPublicKeyRetrieval=true}
+    username: ${SPRING_DATASOURCE_USERNAME:root}
+    password: ${SPRING_DATASOURCE_PASSWORD:}
+
+  # Jackson 配置
+  jackson:
+    date-format: yyyy-MM-dd HH:mm:ss
+    time-zone: Asia/Shanghai
+    default-property-inclusion: non_null
+
+  # 静态资源配置
+  web:
+    resources:
+      static-locations: classpath:/static/,file:uploads/
+
+# 文件上传目录
+file:
+  upload-dir: uploads
+
+# MyBatis-Plus 配置
+mybatis-plus:
+  # Mapper XML 文件位置
+  mapper-locations: classpath:/mapper/**/*.xml
+  # 实体类包路径
+  type-aliases-package: com.smartedu.entity
+  configuration:
+    # 驼峰命名转换
+    map-underscore-to-camel-case: true
+    # 打印 SQL 日志
+    log-impl: org.apache.ibatis.logging.stdout.StdOutImpl
+  global-config:
+    db-config:
+      # 主键策略：自增
+      id-type: auto
+      # 逻辑删除配置
+      logic-delete-field: deleted
+      logic-delete-value: 1
+      logic-not-delete-value: 0
+
+# Spring Security 配置
+security:
+  jwt:
+    # JWT 密钥（生产环境必须通过 JWT_SECRET 环境变量覆盖）
+    secret: ${JWT_SECRET:dev-only-secret-key-change-me-in-production-0123456789}
+    # 令牌过期时间（毫秒）：7 天
+    expiration: 604800000
+    # Token 前缀
+    token-prefix: "Bearer "
+    # 不需要认证的接口
+    ignore-urls:
+      - /auth/login
+      - /auth/register
+      - /swagger-ui/**
+      - /v3/api-docs/**
+      - /h2-console/**
+      - /uploads/**
+
+# Swagger / OpenAPI 配置
+springdoc:
+  api-docs:
+    path: /v3/api-docs
+    enabled: true
+  swagger-ui:
+    path: /swagger-ui.html
+    enabled: true
+    tags-sorter: alpha
+    operations-sorter: alpha
+
+# Actuator 配置
+management:
+  endpoints:
+    web:
+      exposure:
+        include: health,info
+  endpoint:
+    health:
+      show-details: when-authorized
+  health:
+    db:
+      enabled: true
+
+# 日志配置
+logging:
+  level:
+    root: INFO
+    com.smartedu: DEBUG
+    com.smartedu.mapper: DEBUG
+  pattern:
+    console: "%d{yyyy-MM-dd HH:mm:ss.SSS} [%thread] %-5level %logger{50} - %msg%n"
+
+# ============================================================
+# 新闻 API 配置
+# ============================================================
+news:
+  api:
+    # 使用 IT 之家 RSS 订阅（完全免费，无需 API key）
+    # IT 之家科技新闻：https://www.ithome.com/rss/
+    # 国内访问速度快，内容涵盖科技、数码、互联网等领域
+    url: https://www.ithome.com/rss/
+    # 轮播图数量：每次抓取前 3 条作为轮播图
+    carousel-count: 3
+  schedule:
+    cron: "0 0 2 * * ?"
+
+# ============================================================
+# 火山 Coding Plan AI 配置
+# ============================================================
+ai:
+  bailian:
+    # API Key（从火山引擎控制台获取，通过环境变量注入，不得写入代码库）
+    api-key: ${AI_API_KEY:}
+    # 模型名称（火山 Coding Plan 支持的模型）
+    model: ${AI_MODEL:doubao-seed-2.0-pro}
+    # OpenAI 兼容端点（火山 Coding Plan 专用）
+    endpoint: https://ark.cn-beijing.volces.com/api/coding/v3
+
