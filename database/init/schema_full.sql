@@ -724,10 +724,10 @@ create index idx_user_id on video_post (user_id);
 -- 插入测试用户（密码为 123456 的 BCrypt 加密）
 -- 插入测试用户
 INSERT INTO `users` (`username`, `password`, `real_name`, `email`, `role`, `grade`, `major`, `class_name`, `department`) VALUES
-('student001', '$2a$10$rOEX7s.jW7Z5Z5Z5Z5Z5Z5Z5Z5Z5Z5Z5Z5Z5Z5Z5Z5Z5Z5Z5Z5Z5K', '张三', 'zhangsan@example.com', 'STUDENT', '2023 级', '计算机科学 with 技术', '计算机 1 班', NULL),
-('student002', '$2a$10$rOEX7s.jW7Z5Z5Z5Z5Z5Z5Z5Z5Z5Z5Z5Z5Z5Z5Z5Z5Z5Z5Z5Z5Z5K', '李四', 'lisi@example.com', 'STUDENT', '2023 级', '计算机科学与技术', '计算机 1 班', NULL),
-('teacher001', '$2a$10$rOEX7s.jW7Z5Z5Z5Z5Z5Z5Z5Z5Z5Z5Z5Z5Z5Z5Z5Z5Z5Z5Z5Z5Z5K', '王老师', 'wang@example.com', 'TEACHER', NULL, NULL, NULL, '计算机学院'),
-('admin001', '$2a$10$rOEX7s.jW7Z5Z5Z5Z5Z5Z5Z5Z5Z5Z5Z5Z5Z5Z5Z5Z5Z5Z5Z5Z5Z5K', '管理员', 'admin@example.com', 'ADMIN', NULL, NULL, NULL, NULL);
+('student001', '$2b$10$w9G3lFYSIQ0GBofY.XudjuNicNPhA/ApTtTG4vL1qk/SrToAE/pdK', '张三', 'zhangsan@example.com', 'STUDENT', '2023 级', '计算机科学 with 技术', '计算机 1 班', NULL),
+('student002', '$2b$10$w9G3lFYSIQ0GBofY.XudjuNicNPhA/ApTtTG4vL1qk/SrToAE/pdK', '李四', 'lisi@example.com', 'STUDENT', '2023 级', '计算机科学与技术', '计算机 1 班', NULL),
+('teacher001', '$2b$10$w9G3lFYSIQ0GBofY.XudjuNicNPhA/ApTtTG4vL1qk/SrToAE/pdK', '王老师', 'wang@example.com', 'TEACHER', NULL, NULL, NULL, '计算机学院'),
+('admin001', '$2b$10$w9G3lFYSIQ0GBofY.XudjuNicNPhA/ApTtTG4vL1qk/SrToAE/pdK', '管理员', 'admin@example.com', 'ADMIN', NULL, NULL, NULL, NULL);
 -- 插入测试课程
 INSERT INTO `courses` (`course_name`, `course_code`, `description`, `credit`, `teacher_id`, `semester`, `grade`, `major`) VALUES
 ('数据结构', 'CS101', '计算机专业核心基础课程', 4.0, 3, '2024-2025-1', '2023 级', '计算机科学与技术'),
