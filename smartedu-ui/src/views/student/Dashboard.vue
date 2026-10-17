@@ -286,7 +286,9 @@ const weekdayLabels = [
 ]
 
 const parseLocalDate = (date: string) => {
+  if (!date) return null
   const [year, month, day] = date.split('-').map(Number)
+  if (!year || !month || !day) return null
   return new Date(year, month - 1, day)
 }
 
@@ -433,11 +435,19 @@ const loadSelectedDateNote = async (date: string) => {
   }
 }
 
-const formatFullDate = (date: string) =>
-  parseLocalDate(date).toLocaleDateString('zh-CN', { month: 'long', day: 'numeric', weekday: 'long' })
+const formatFullDate = (date: string) => {
+  const parsed = parseLocalDate(date)
+  return parsed
+    ? parsed.toLocaleDateString('zh-CN', { month: 'long', day: 'numeric', weekday: 'long' })
+    : '请选择日期'
+}
 
-const formatDayTitle = (date: string) =>
-  parseLocalDate(date).toLocaleDateString('zh-CN', { year: 'numeric', month: 'long', day: 'numeric', weekday: 'long' })
+const formatDayTitle = (date: string) => {
+  const parsed = parseLocalDate(date)
+  return parsed
+    ? parsed.toLocaleDateString('zh-CN', { year: 'numeric', month: 'long', day: 'numeric', weekday: 'long' })
+    : '请选择日期'
+}
 
 const displayValue = (value?: string) => (value && value.trim() ? value : '暂无记录')
 

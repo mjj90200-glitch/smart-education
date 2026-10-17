@@ -675,6 +675,15 @@ onUnmounted(() => {
 
 /* ============ 表单样式 ============ */
 .login-form {
+  /* 校验错误提示为绝对定位，为每个表单项预留展示空间，避免与下一项标签重叠 */
+  :deep(.el-form-item) {
+    margin-bottom: 30px;
+
+    &:last-of-type {
+      margin-bottom: 0;
+    }
+  }
+
   .input-group {
     width: 100%;
 

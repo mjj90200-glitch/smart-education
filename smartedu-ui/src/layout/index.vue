@@ -71,12 +71,12 @@
             <div class="user-info">
               <el-avatar :size="36" :src="userStore.userInfo?.avatar" />
               <div class="user-details">
-                <span class="user-name">{{ userStore.userInfo?.realName || '用户' }}</span>
-                <span class="user-id">{{ userStore.userInfo?.username || '' }}</span>
+                <span class="user-name">{{ userStore.isLoggedIn ? (userStore.userInfo?.realName || '用户') : '未登录' }}</span>
+                <span class="user-id">{{ userStore.isLoggedIn ? (userStore.userInfo?.username || '') : '点击登录' }}</span>
               </div>
             </div>
             <template #dropdown>
-              <el-dropdown-menu>
+              <el-dropdown-menu v-if="userStore.isLoggedIn">
                 <el-dropdown-item @click="$router.push('/profile')">
                   <el-icon><User /></el-icon>
                   个人中心
@@ -86,6 +86,16 @@
                   退出登录
                 </el-dropdown-item>
               </el-dropdown-menu>
+              <el-dropdown-menu v-else>
+                <el-dropdown-item @click="$router.push('/login')">
+                  <el-icon><User /></el-icon>
+                  登录
+                </el-dropdown-item>
+                <el-dropdown-item divided @click="$router.push('/register')">
+                  <el-icon><Plus /></el-icon>
+                  注册新账号
+                </el-dropdown-item>
+              </el-dropdown-menu>
             </template>
           </el-dropdown>
         </div>
@@ -93,9 +103,9 @@
 
       <!-- 主要内容 -->
       <el-main class="layout-main">
-        <router-view v-slot="{ Component }">
+        <router-view v-slot="{ Component, route }">
           <transition name="fade" mode="out-in">
-            <component :is="Component" />
+            <component :is="Component" :key="route.path" />
           </transition>
         </router-view>
       </el-main>
