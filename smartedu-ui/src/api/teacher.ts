@@ -109,6 +109,28 @@ export const homeworkApi = {
     })
     return response.json()
   },
+  // 发布 AI 批改作业（上传含答案的客观题文档，学生提交即时自动判分）
+  quickPublishForAiGrading: async (formData: FormData) => {
+    const userStoreJson = localStorage.getItem('smartedu_user')
+    let token = ''
+    if (userStoreJson) {
+      try {
+        const userStore = JSON.parse(userStoreJson)
+        token = userStore.token || ''
+      } catch (e) {
+        console.error('解析用户 store 失败:', e)
+      }
+    }
+
+    const response = await fetch('/api/homework/teacher/ai-publish', {
+      method: 'POST',
+      headers: {
+        'Authorization': `Bearer ${token}`
+      },
+      body: formData
+    })
+    return response.json()
+  },
   // 批改单个提交
   gradeSubmission: (submissionId: number, score: number, comment?: string) => {
     const params: any = { score }

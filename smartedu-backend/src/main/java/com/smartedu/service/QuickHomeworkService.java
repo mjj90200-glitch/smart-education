@@ -39,6 +39,8 @@ public class QuickHomeworkService {
     private final CourseMapper courseMapper;
     private final UserMapper userMapper;
     private final HomeworkAnalysisService homeworkAnalysisService;
+    private final AiGradeHomeworkPreparationService aiGradeHomeworkPreparationService;
+    private final AIGradeService aiGradeService;
 
     @Value("${file.upload-dir:uploads}")
     private String uploadDir;
@@ -47,12 +49,82 @@ public class QuickHomeworkService {
                                 HomeworkSubmissionMapper submissionMapper,
                                 CourseMapper courseMapper,
                                 UserMapper userMapper,
-                                HomeworkAnalysisService homeworkAnalysisService) {
+                                HomeworkAnalysisService homeworkAnalysisService,
+                                AiGradeHomeworkPreparationService aiGradeHomeworkPreparationService,
+                                AIGradeService aiGradeService) {
         this.homeworkMapper = homeworkMapper;
         this.submissionMapper = submissionMapper;
         this.courseMapper = courseMapper;
         this.userMapper = userMapper;
         this.homeworkAnalysisService = homeworkAnalysisService;
+        this.aiGradeHomeworkPreparationService = aiGradeHomeworkPreparationService;
+        this.aiGradeService = aiGradeService;
+    }
+
+    /**
+     * 使用 AI 批改前置流程发布作业：
+     * 1. 读取教师上传的选择题/填空题文件
+     * 2. 生成带"学生作答"空位的学生版 docx
+     * 3. 保存答案键到教师解析字段，自动批改时用于客观题评分
+     */
+    @Transactional
+    public Map<String, Object> quickPublishForAiGrading(MultipartFile file, String title, Long courseId,
+                                                         String description, String startTime, String endTime,
+                                                         Long teacherId) throws IOException {
+        AiGradeHomeworkPreparationService.PreparedHomeworkPackage preparedPackage =
+            aiGradeHomeworkPreparationService.prepare(file, title);
+
+        Homework homework = new Homework();
+        homework.setTitle(title);
+        String visibleDescription = "【AI批改作业】本作业仅支持选择题或填空题。学生请下载附件查看题目，并在提交框中按“学生作答：X”逐题填写答案。";
+        if (description != null && !description.isBlank()) {
+            visibleDescription += "\n" + description;
+        }
+        homework.setDescription(visibleDescription);
+        homework.setCourseId(courseId);
+        homework.setTeacherId(teacherId);
+        homework.setQuestionIds("");
+        homework.setAttachmentUrl(preparedPackage.attachmentUrl);
+        homework.setAttachmentName(preparedPackage.attachmentName);
+        homework.setContent("AI 批改作业已生成学生作答版附件，适用于选择题和填空题。");
+        homework.setTeacherEditedAnalysis(preparedPackage.answerKeyContent);
+        homework.setTotalScore(new BigDecimal("100"));
+        homework.setPassScore(new BigDecimal("60"));
+
+        DateTimeFormatter formatter = DateTimeFormatter.ofPattern("yyyy-MM-dd HH:mm:ss");
+        if (startTime != null && !startTime.isEmpty()) {
+            homework.setStartTime(LocalDateTime.parse(startTime, formatter));
+        } else {
+            homework.setStartTime(LocalDateTime.now());
+        }
+        if (endTime != null && !endTime.isEmpty()) {
+            homework.setEndTime(LocalDateTime.parse(endTime, formatter));
+        } else {
+            homework.setEndTime(LocalDateTime.now().plusDays(7));
+        }
+
+        homework.setSubmitLimit(0);
+        homework.setTimeLimitMinutes(0);
+        homework.setAutoGrade(1);
+        homework.setStatus(1);
+
+        homeworkMapper.insert(homework);
+
+        try {
+            homeworkAnalysisService.generateAnalysisAsync(homework.getId());
+        } catch (Exception e) {
+            logger.error("触发 AI 解析失败：homeworkId={}, error={}", homework.getId(), e.getMessage(), e);
+        }
+
+        Map<String, Object> result = new HashMap<>();
+        result.put("id", homework.getId());
+        result.put("title", homework.getTitle());
+        result.put("attachmentUrl", homework.getAttachmentUrl());
+        result.put("attachmentName", homework.getAttachmentName());
+        result.put("questionCount", preparedPackage.questionCount);
+        result.put("autoGrade", homework.getAutoGrade());
+        result.put("message", "AI 批改作业发布成功");
+        return result;
     }
 
     /**
@@ -178,6 +250,30 @@ public class QuickHomeworkService {
         Map<String, Object> result = new HashMap<>();
         result.put("id", submission.getId());
         result.put("message", "提交成功");
+
+        // AI 客观题作业：提交即按答案键自动判分
+        if (aiGradeService.supportsObjectiveAutoGrade(homework)) {
+            try {
+                double totalScore = homework.getTotalScore() == null ? 100.0 : homework.getTotalScore().doubleValue();
+                Map<String, Object> aiResult = aiGradeService.gradeObjectiveContent(
+                    homework, answers != null ? answers : "", totalScore);
+                Double aiScore = (Double) aiResult.get("score");
+                String aiFeedback = (String) aiResult.get("feedback");
+                submission.setScore(BigDecimal.valueOf(aiScore != null ? aiScore : 0));
+                submission.setAiScore(BigDecimal.valueOf(aiScore != null ? aiScore : 0));
+                submission.setAiFeedback(aiFeedback);
+                submission.setComment(aiFeedback);
+                submission.setGradeStatus(2);
+                submission.setGradeTime(LocalDateTime.now());
+                submissionMapper.updateById(submission);
+                result.put("autoGraded", true);
+                result.put("score", aiScore);
+                result.put("feedback", aiFeedback);
+            } catch (Exception e) {
+                logger.error("AI 自动批改失败：submissionId={}, error={}", submission.getId(), e.getMessage(), e);
+            }
+        }
+
         return result;
     }
 

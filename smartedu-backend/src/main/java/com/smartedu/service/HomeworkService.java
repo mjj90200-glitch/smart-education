@@ -675,13 +675,16 @@ public class HomeworkService extends ServiceImpl<HomeworkMapper, Homework> {
 
         for (HomeworkSubmission submission : submissions) {
             try {
-                Map<String, Object> aiResult = aiGradeService.gradeHomework(
-                    homework.getTitle(),
-                    homework.getDescription(),
-                    submission.getSubmissionContent(),
-                    submission.getSubmissionType(),
-                    homework.getTotalScore().doubleValue()
-                );
+                double totalScore = homework.getTotalScore() == null ? 100.0 : homework.getTotalScore().doubleValue();
+                Map<String, Object> aiResult = aiGradeService.supportsObjectiveAutoGrade(homework)
+                    ? aiGradeService.gradeObjectiveContent(homework, submission.getSubmissionContent(), totalScore)
+                    : aiGradeService.gradeHomework(
+                        homework.getTitle(),
+                        homework.getDescription(),
+                        submission.getSubmissionContent(),
+                        submission.getSubmissionType(),
+                        totalScore
+                    );
 
                 Double aiScore = (Double) aiResult.get("score");
                 String aiFeedback = (String) aiResult.get("feedback");

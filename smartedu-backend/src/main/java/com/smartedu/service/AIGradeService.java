@@ -2,6 +2,8 @@ package com.smartedu.service;
 
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
+import com.smartedu.entity.Homework;
+import com.smartedu.entity.HomeworkSubmission;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Value;
@@ -11,10 +13,13 @@ import org.springframework.web.client.RestTemplate;
 
 import java.io.File;
 import java.io.IOException;
+import java.math.BigDecimal;
+import java.math.RoundingMode;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.nio.file.Paths;
 import java.util.*;
+import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 
 /**
@@ -174,6 +179,176 @@ public class AIGradeService {
         } catch (IOException e) {
             return null;
         }
+    }
+
+    private static final Pattern STUDENT_ANSWER_PATTERN = Pattern.compile(
+        "学生作答\\s*[:：]\\s*([^\\n\\r]*)",
+        Pattern.CASE_INSENSITIVE
+    );
+    private static final Pattern NUMBERED_ANSWER_PATTERN = Pattern.compile(
+        "^\\s*(?:第\\s*)?(\\d+)\\s*(?:题)?\\s*[、.．):：]\\s*(?:答案\\s*[:：])?\\s*(.+)$"
+    );
+
+    /**
+     * 判断作业是否满足客观题自动批改条件：
+     * 教师开启自动批改，且解析字段中带有 AI 批改答案键（AI_GRADE_OBJECTIVE_V1）。
+     */
+    public boolean supportsObjectiveAutoGrade(Homework homework) {
+        return homework != null
+            && Integer.valueOf(1).equals(homework.getAutoGrade())
+            && homework.getTeacherEditedAnalysis() != null
+            && homework.getTeacherEditedAnalysis().startsWith(AiGradeHomeworkPreparationService.ANSWER_KEY_MARKER);
+    }
+
+    /**
+     * 按答案键对学生提交的文本作答做客观题判分。
+     * @param submissionContent 学生提交的文本内容（每题以"学生作答：X"形式作答）
+     */
+    public Map<String, Object> gradeObjectiveContent(Homework homework, String submissionContent, double totalScore) {
+        List<ObjectiveAnswer> answerKey = parseObjectiveAnswerKey(homework.getTeacherEditedAnalysis());
+        if (answerKey.isEmpty()) {
+            throw new IllegalArgumentException("AI 批改答案键为空，无法自动评分");
+        }
+
+        Map<Integer, String> submittedAnswers = extractSubmittedAnswers(submissionContent);
+
+        int correctCount = 0;
+        List<String> wrongItems = new ArrayList<>();
+        List<String> missingItems = new ArrayList<>();
+
+        for (int i = 0; i < answerKey.size(); i++) {
+            ObjectiveAnswer expected = answerKey.get(i);
+            String studentAnswer = submittedAnswers.get(expected.number);
+            if (studentAnswer == null && i + 1 <= submittedAnswers.size()) {
+                studentAnswer = submittedAnswers.get(i + 1);
+            }
+
+            if (studentAnswer == null || studentAnswer.isBlank() || studentAnswer.replace("_", "").isBlank()) {
+                missingItems.add(String.valueOf(expected.number));
+                continue;
+            }
+
+            if (isAnswerMatched(expected, studentAnswer)) {
+                correctCount++;
+            } else {
+                wrongItems.add(expected.number + "题");
+            }
+        }
+
+        BigDecimal score = BigDecimal.valueOf(totalScore)
+            .multiply(BigDecimal.valueOf(correctCount))
+            .divide(BigDecimal.valueOf(answerKey.size()), 2, RoundingMode.HALF_UP);
+
+        StringBuilder feedback = new StringBuilder();
+        feedback.append("AI 客观题批改：答对 ")
+            .append(correctCount)
+            .append("/")
+            .append(answerKey.size())
+            .append(" 题。");
+        if (!wrongItems.isEmpty()) {
+            feedback.append(" 错题：").append(String.join("、", wrongItems)).append("。");
+        }
+        if (!missingItems.isEmpty()) {
+            feedback.append(" 未作答：").append(String.join("、", missingItems)).append("。");
+        }
+
+        Map<String, Object> result = new HashMap<>();
+        result.put("score", score.doubleValue());
+        result.put("feedback", feedback.toString());
+        return result;
+    }
+
+    private List<ObjectiveAnswer> parseObjectiveAnswerKey(String answerKeyContent) {
+        if (answerKeyContent == null || !answerKeyContent.startsWith(AiGradeHomeworkPreparationService.ANSWER_KEY_MARKER)) {
+            return List.of();
+        }
+
+        String json = answerKeyContent.substring(AiGradeHomeworkPreparationService.ANSWER_KEY_MARKER.length()).trim();
+        try {
+            JsonNode root = objectMapper.readTree(json);
+            List<ObjectiveAnswer> answers = new ArrayList<>();
+            if (root.isArray()) {
+                for (JsonNode item : root) {
+                    ObjectiveAnswer answer = new ObjectiveAnswer();
+                    answer.number = item.path("number").asInt(answers.size() + 1);
+                    answer.type = item.path("type").asText("fill_blank");
+                    answer.answer = item.path("answer").asText("");
+                    answers.add(answer);
+                }
+            }
+            return answers;
+        } catch (Exception e) {
+            logger.error("解析 AI 批改答案键失败：{}", e.getMessage());
+            return List.of();
+        }
+    }
+
+    private Map<Integer, String> extractSubmittedAnswers(String text) {
+        Map<Integer, String> answers = new LinkedHashMap<>();
+        if (text == null || text.isBlank()) {
+            return answers;
+        }
+
+        Matcher studentAnswerMatcher = STUDENT_ANSWER_PATTERN.matcher(text);
+        int sequence = 1;
+        while (studentAnswerMatcher.find()) {
+            answers.put(sequence, studentAnswerMatcher.group(1).trim());
+            sequence++;
+        }
+
+        if (!answers.isEmpty()) {
+            return answers;
+        }
+
+        String[] lines = text.split("\\R");
+        for (String line : lines) {
+            Matcher numberedMatcher = NUMBERED_ANSWER_PATTERN.matcher(line);
+            if (numberedMatcher.find()) {
+                answers.put(Integer.parseInt(numberedMatcher.group(1)), numberedMatcher.group(2).trim());
+            }
+        }
+        return answers;
+    }
+
+    private boolean isAnswerMatched(ObjectiveAnswer expected, String submittedAnswer) {
+        if ("choice".equalsIgnoreCase(expected.type)) {
+            String expectedChoice = normalizeChoice(expected.answer);
+            String submittedChoice = normalizeChoice(submittedAnswer);
+            return !expectedChoice.isBlank() && expectedChoice.equals(submittedChoice);
+        }
+
+        String normalizedSubmitted = normalizeFillBlank(submittedAnswer);
+        String[] candidates = expected.answer.split("[/|｜或]");
+        for (String candidate : candidates) {
+            if (normalizeFillBlank(candidate).equals(normalizedSubmitted)) {
+                return true;
+            }
+        }
+        return false;
+    }
+
+    private String normalizeChoice(String answer) {
+        if (answer == null) {
+            return "";
+        }
+        Matcher matcher = Pattern.compile("[A-Da-d]").matcher(answer);
+        return matcher.find() ? matcher.group().toUpperCase(Locale.ROOT) : normalizeFillBlank(answer).toUpperCase(Locale.ROOT);
+    }
+
+    private String normalizeFillBlank(String answer) {
+        if (answer == null) {
+            return "";
+        }
+        return answer
+            .replaceAll("[\\s，,。.；;：:、（）()【】\\[\\]＿_]+", "")
+            .trim()
+            .toLowerCase(Locale.ROOT);
+    }
+
+    private static class ObjectiveAnswer {
+        int number;
+        String type;
+        String answer;
     }
 
     /**

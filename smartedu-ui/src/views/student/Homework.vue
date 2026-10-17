@@ -365,7 +365,11 @@ const handleSubmit = async () => {
     const res = await postFile('/student/homework/submit', formData)
 
     if (res.code === 200) {
-      ElMessage.success('🎉 提交成功！正在加载 AI 思路点拨...')
+      if (res.data?.autoGraded) {
+        ElMessage.success(`🎉 提交成功！AI 客观题批改得分：${res.data.score} 分。${res.data.feedback || ''}`)
+      } else {
+        ElMessage.success('🎉 提交成功！正在加载 AI 思路点拨...')
+      }
       submitVisible.value = false
 
       // 重新获取作业详情（包含解析内容）

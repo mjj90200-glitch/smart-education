@@ -18,10 +18,12 @@ import org.springframework.web.multipart.MultipartFile;
 
 import java.io.File;
 import java.io.IOException;
+import java.math.BigDecimal;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.nio.file.Paths;
 import java.time.LocalDateTime;
+import java.util.Map;
 import java.util.ArrayList;
 import java.util.List;
 
@@ -36,15 +38,18 @@ public class StudentHomeworkService {
     private final HomeworkSubmissionMapper submissionMapper;
     private final CourseMapper courseMapper;
     private final UserMapper userMapper;
+    private final AIGradeService aiGradeService;
 
     public StudentHomeworkService(HomeworkMapper homeworkMapper,
                                   HomeworkSubmissionMapper submissionMapper,
                                   CourseMapper courseMapper,
-                                  UserMapper userMapper) {
+                                  UserMapper userMapper,
+                                  AIGradeService aiGradeService) {
         this.homeworkMapper = homeworkMapper;
         this.submissionMapper = submissionMapper;
         this.courseMapper = courseMapper;
         this.userMapper = userMapper;
+        this.aiGradeService = aiGradeService;
     }
 
     /**
@@ -148,7 +153,7 @@ public class StudentHomeworkService {
      * 提交作业 - 简化版（支持文件或文字）
      */
     @Transactional
-    public void submitHomework(Long homeworkId, Long studentId, MultipartFile file, String content) {
+    public HomeworkSubmission submitHomework(Long homeworkId, Long studentId, MultipartFile file, String content) {
         if (file == null && (content == null || content.trim().isEmpty())) {
             throw new RuntimeException("请上传文件或填写文字答案");
         }
@@ -195,6 +200,29 @@ public class StudentHomeworkService {
         }
 
         submissionMapper.insert(submission);
+
+        // AI 客观题作业：提交即按答案键自动判分
+        if (aiGradeService.supportsObjectiveAutoGrade(homework)) {
+            try {
+                double totalScore = homework.getTotalScore() == null ? 100.0 : homework.getTotalScore().doubleValue();
+                Map<String, Object> aiResult = aiGradeService.gradeObjectiveContent(
+                    homework, submission.getSubmissionContent(), totalScore);
+                Double aiScore = (Double) aiResult.get("score");
+                String aiFeedback = (String) aiResult.get("feedback");
+                submission.setScore(BigDecimal.valueOf(aiScore != null ? aiScore : 0));
+                submission.setAiScore(BigDecimal.valueOf(aiScore != null ? aiScore : 0));
+                submission.setAiFeedback(aiFeedback);
+                submission.setComment(aiFeedback);
+                submission.setGradeStatus(2);
+                submission.setGradeTime(now);
+                submissionMapper.updateById(submission);
+            } catch (Exception e) {
+                org.slf4j.LoggerFactory.getLogger(StudentHomeworkService.class)
+                    .error("AI 自动批改失败：submissionId={}, error={}", submission.getId(), e.getMessage(), e);
+            }
+        }
+
+        return submission;
     }
 
     /**
