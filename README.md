@@ -7,7 +7,8 @@
 ```
 SmartEdu-Platform/
 ├── database/                 # 数据库脚本
-│   └── schema.sql           # MySQL DDL 语句
+│   ├── init/schema_full.sql # MySQL 全量建库脚本（DDL+种子数据）
+│   └── test/                # 测试数据脚本
 ├── smartedu-backend/        # Spring Boot 后端
 │   ├── src/main/java/com/smartedu/
 │   │   ├── controller/      # 控制器层
@@ -70,7 +71,7 @@ SmartEdu-Platform/
 
 ### 数据库初始化
 ```bash
-mysql -u root -p < database/schema.sql
+mysql -u root -p < database/init/schema_full.sql
 ```
 
 ### 后端启动

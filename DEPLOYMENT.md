@@ -169,7 +169,7 @@ docker-compose down -v
 rm -rf mysql/data
 docker-compose up -d --build
 
-# 检查 init.sql 是否执行
+# 检查初始化脚本 schema_full.sql 是否执行
 docker-compose logs mysql | grep -i "init"
 ```
 

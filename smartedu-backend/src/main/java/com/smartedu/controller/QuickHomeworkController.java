@@ -53,6 +53,31 @@ public class QuickHomeworkController {
         }
     }
 
+    /**
+     * 发布 AI 批改作业（教师）
+     * 上传仅含选择题/填空题（每题末尾写明"答案："）的文档，
+     * 系统解析答案键并生成学生作答版附件；学生提交后即时自动判分。
+     */
+    @PostMapping("/teacher/ai-publish")
+    @Operation(summary = "发布 AI 批改作业", description = "上传含答案的客观题文档，发布后学生提交即时自动批改")
+    public Result<Map<String, Object>> quickPublishForAiGrading(
+            @RequestParam("file") MultipartFile file,
+            @RequestParam("title") String title,
+            @RequestParam("courseId") Long courseId,
+            @RequestParam(value = "description", required = false) String description,
+            @RequestParam(value = "startTime", required = false) String startTime,
+            @RequestParam(value = "endTime", required = false) String endTime,
+            @AuthenticationPrincipal UserDetails userDetails) {
+        try {
+            Long teacherId = getUserId(userDetails);
+            Map<String, Object> result = quickHomeworkService.quickPublishForAiGrading(
+                file, title, courseId, description, startTime, endTime, teacherId);
+            return Result.success("发布成功", result);
+        } catch (Exception e) {
+            return Result.error("发布失败: " + e.getMessage());
+        }
+    }
+
     // ==================== 学生端 ====================
 
     /**

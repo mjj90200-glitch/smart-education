@@ -17,7 +17,9 @@ import io.swagger.v3.oas.annotations.tags.Tag;
 import org.springframework.web.bind.annotation.*;
 
 import java.util.ArrayList;
+import java.util.HashMap;
 import java.util.List;
+import java.util.Map;
 import java.time.LocalDate;
 
 /**
@@ -468,10 +470,17 @@ public class StudentLearningController {
 
     @GetMapping("/analysis")
     @Operation(summary = "获取学生学情分析数据")
-    @Parameter(name = "courseId", description = "课程 ID", example = "1")
+    @Parameter(name = "courseId", description = "课程 ID，缺省时自动选取学生的第一门课程", example = "1")
     public Result<Object> getStudentAnalysis(
-            @RequestParam Long courseId) {
+            @RequestParam(required = false) Long courseId) {
         Long studentId = getCurrentUserId();
+        if (courseId == null) {
+            List<Map<String, Object>> courses = studentLearningAnalysisService.getStudentCourses(studentId);
+            if (courses == null || courses.isEmpty() || !(courses.get(0).get("id") instanceof Number firstCourseId)) {
+                return Result.success("获取成功", new HashMap<String, Object>());
+            }
+            courseId = firstCourseId.longValue();
+        }
         return Result.success("获取成功", studentLearningAnalysisService.getStudentAnalysis(studentId, courseId));
     }
 

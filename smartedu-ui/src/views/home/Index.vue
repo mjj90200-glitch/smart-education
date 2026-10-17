@@ -549,7 +549,14 @@ const refreshNews = async () => {
 
     // 检查响应
     if (carouselRes.code === 200) {
-      carouselNews.value = carouselRes.data || []
+      // 按标题去重：置顶文章可能同时出现在精选与普通列表中
+      const seenTitles = new Set<string>()
+      carouselNews.value = (carouselRes.data || []).filter((item: NewsItem) => {
+        const key = (item.title || '').trim()
+        if (!key || seenTitles.has(key)) return false
+        seenTitles.add(key)
+        return true
+      })
     }
     if (listRes.code === 200) {
       listNews.value = listRes.data || []

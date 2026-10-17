@@ -3,16 +3,22 @@ echo ============================================================
 echo SmartEdu-Platform 后端启动脚本
 echo ============================================================
 echo.
-echo 正在启动后端服务...
-echo.
-
 cd /d "%~dp0smartedu-backend"
 
-REM 使用 Cursor 自带的 Java 21 启动
-"C:\Users\mjj\.cursor\extensions\redhat.java-1.53.0-win32-x64\jre\21.0.10-win32-x86_64\bin\java.exe" ^
-  -cp "target/classes;target/test-classes;target/dependency/*" ^
-  com.smartedu.SmartEduApplication
+REM 激活本机开发配置（application-local.yml，不入库）
+set SPRING_PROFILES_ACTIVE=local
 
-echo.
-echo 后端服务已停止
+REM 优先使用 Maven 运行，否则运行已打包的 jar
+where mvn >nul 2>nul
+if %errorlevel%==0 (
+  call mvn spring-boot:run
+) else (
+  if exist target\smartedu-backend-1.0.0-SNAPSHOT.jar (
+    java -jar target\smartedu-backend-1.0.0-SNAPSHOT.jar
+  ) else (
+    echo [错误] 未找到构建产物，请先运行 BUILD_BACKEND.bat
+    pause
+    exit /b 1
+  )
+)
 pause

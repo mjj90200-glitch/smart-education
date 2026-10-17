@@ -8,6 +8,10 @@
             <el-button @click="openCourseSelectorDialog">
               选择课程
             </el-button>
+            <el-button type="success" @click="openAiPublishDialog">
+              <el-icon><MagicStick /></el-icon>
+              AI 批改发布
+            </el-button>
             <el-button type="primary" @click="openPublishDialog">
               <el-icon><Plus /></el-icon>
               发布作业
@@ -142,6 +146,61 @@
       <template #footer>
         <el-button @click="showPublishDialog = false">取消</el-button>
         <el-button type="primary" @click="handlePublish" :loading="publishing">立即发布</el-button>
+      </template>
+    </el-dialog>
+
+    <!-- AI 批改发布对话框 -->
+    <el-dialog v-model="showAiPublishDialog" title="发布 AI 批改作业" width="620px" destroy-on-close>
+      <el-alert type="info" :closable="false" style="margin-bottom: 16px;">
+        <p>上传仅含<strong>选择题或填空题</strong>的文档，每道题末尾写明「答案：X」。</p>
+        <p>系统会自动解析答案键并生成学生作答版附件；学生提交后<strong>即时自动判分</strong>。</p>
+      </el-alert>
+      <el-form :model="aiPublishForm" label-width="100px" :rules="formRules" ref="aiFormRef">
+        <el-form-item label="作业标题" prop="title">
+          <el-input v-model="aiPublishForm.title" placeholder="请输入作业标题" />
+        </el-form-item>
+        <el-form-item label="所属课程" prop="courseId">
+          <el-select v-model="aiPublishForm.courseId" placeholder="请选择课程" style="width: 100%;">
+            <el-option v-for="course in teacherCourseList" :key="course.id" :label="course.courseName" :value="course.id" />
+          </el-select>
+        </el-form-item>
+        <el-form-item label="题目文档" prop="file">
+          <el-upload
+            ref="aiUploadRef"
+            :auto-upload="false"
+            :limit="1"
+            accept=".docx,.doc,.pdf,.txt"
+            :on-change="handleAiFileChange"
+            :on-exceed="handleExceed"
+            :file-list="aiFileList"
+          >
+            <template #trigger>
+              <el-button type="primary">选择文档</el-button>
+            </template>
+            <template #tip>
+              <div class="el-upload__tip">
+                示例格式：1、Python 是解释型语言吗？A 是 B 否<br />答案：A（支持 Word、PDF、TXT）
+              </div>
+            </template>
+          </el-upload>
+        </el-form-item>
+        <el-form-item label="作业描述">
+          <el-input v-model="aiPublishForm.description" type="textarea" :rows="2" placeholder="补充说明（可选）" />
+        </el-form-item>
+        <el-form-item label="截止时间">
+          <el-date-picker
+            v-model="aiPublishForm.endTime"
+            type="datetime"
+            placeholder="不填则7天后截止"
+            style="width: 100%"
+            format="YYYY-MM-DD HH:mm"
+            value-format="YYYY-MM-DD HH:mm:ss"
+          />
+        </el-form-item>
+      </el-form>
+      <template #footer>
+        <el-button @click="showAiPublishDialog = false">取消</el-button>
+        <el-button type="success" @click="handleAiPublish" :loading="aiPublishing">发布 AI 批改作业</el-button>
       </template>
     </el-dialog>
 
@@ -430,6 +489,70 @@ const publishForm = reactive({
 const formRules = {
   title: [{ required: true, message: '请输入作业标题', trigger: 'blur' }],
   courseId: [{ required: true, message: '请选择课程', trigger: 'change' }]
+}
+
+// AI 批改发布
+const showAiPublishDialog = ref(false)
+const aiPublishing = ref(false)
+const aiFormRef = ref()
+const aiUploadRef = ref()
+const aiFileList = ref<any[]>([])
+const aiPublishForm = reactive({
+  title: '',
+  courseId: null as number | null,
+  description: '',
+  endTime: '',
+  file: null as File | null
+})
+
+const openAiPublishDialog = () => {
+  aiPublishForm.title = ''
+  aiPublishForm.courseId = filterCourse.value || null
+  aiPublishForm.description = ''
+  aiPublishForm.endTime = ''
+  aiPublishForm.file = null
+  aiFileList.value = []
+  showAiPublishDialog.value = true
+}
+
+const handleAiFileChange = (file: any) => {
+  aiPublishForm.file = file.raw
+}
+
+const handleAiPublish = async () => {
+  try {
+    await aiFormRef.value?.validate()
+  } catch {
+    return
+  }
+
+  if (!aiPublishForm.file) {
+    ElMessage.warning('请选择题目文档')
+    return
+  }
+
+  aiPublishing.value = true
+  try {
+    const formData = new FormData()
+    formData.append('file', aiPublishForm.file)
+    formData.append('title', aiPublishForm.title)
+    formData.append('courseId', String(aiPublishForm.courseId))
+    if (aiPublishForm.description) formData.append('description', aiPublishForm.description)
+    if (aiPublishForm.endTime) formData.append('endTime', aiPublishForm.endTime)
+
+    const res = await homeworkApi.quickPublishForAiGrading(formData)
+    if (res.code === 200) {
+      ElMessage.success(`AI 批改作业发布成功，共解析 ${res.data?.questionCount ?? '?'} 道客观题`)
+      showAiPublishDialog.value = false
+      loadHomeworkList()
+    } else {
+      ElMessage.error(res.message || '发布失败')
+    }
+  } catch (e: any) {
+    ElMessage.error(e.message || '发布失败')
+  } finally {
+    aiPublishing.value = false
+  }
 }
 
 // 提交列表

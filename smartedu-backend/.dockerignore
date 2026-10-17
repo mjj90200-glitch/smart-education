@@ -1,0 +1,21 @@
+# 只排除 target 目录中不需要的内容，保留 JAR 文件
+target/classes
+target/generated-sources
+target/maven-archiver
+target/maven-status
+target/test-classes
+
+.git
+.gitignore
+*.md
+.idea/
+*.iml
+pom.xml.tag
+pom.xml.releaseBackup
+pom.xml.versionsBackup
+pom.xml.next
+release.properties
+dependency-reduced-pom.xml
+buildNumber.properties
+.mvn/timing.properties
+.mvn/wrapper/maven-wrapper.jar

@@ -4,22 +4,18 @@
 
 ### 1. 数据库初始化
 ```bash
-mysql -u root -p < database/schema.sql
+mysql -u root -p < database/init/schema_full.sql
 ```
+初始化脚本已内置测试账号（BCrypt 密码哈希），无需单独更新密码。
 
-### 2. 更新测试账号密码
-```bash
-mysql -u root -p < database/update_password.sql
-```
-
-### 3. 启动后端
+### 2. 启动后端
 ```bash
 cd smartedu-backend
 mvn spring-boot:run
 ```
 后端地址：http://localhost:8080/api/swagger-ui.html
 
-### 4. 启动前端
+### 3. 启动前端
 ```bash
 cd smartedu-ui
 npm install

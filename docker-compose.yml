@@ -1,0 +1,105 @@
+# ============================================================
+# SmartEdu-Platform Docker Compose 配置文件
+# ============================================================
+# 版本说明：
+# - 使用 Docker Compose v2 语法（无需 version 字段）
+# - 包含 MySQL、后端服务、Nginx 三个服务
+# ============================================================
+
+name: smartedu-platform
+
+services:
+  # ------------------------------------------------------------
+  # MySQL 数据库服务
+  # ------------------------------------------------------------
+  mysql:
+    image: mysql:8.0
+    container_name: smartedu-mysql
+    restart: always
+    environment:
+      MYSQL_ROOT_PASSWORD: ${MYSQL_ROOT_PASSWORD:-SmartEdu@2024}
+      MYSQL_DATABASE: ${MYSQL_DATABASE:-smartedu_platform}
+      MYSQL_USER: ${MYSQL_USER:-smartedu}
+      MYSQL_PASSWORD: ${MYSQL_PASSWORD:-SmartEdu@2024}
+      TZ: Asia/Shanghai
+    command:
+      - --character-set-server=utf8mb4
+      - --collation-server=utf8mb4_unicode_ci
+      - --default-authentication-plugin=mysql_native_password
+      - --default-time-zone=+08:00
+    ports:
+      - "3306:3306"
+    volumes:
+      # 数据持久化
+      - ./mysql/data:/var/lib/mysql
+      # 初始化 SQL 脚本（全量建库建表 + 种子数据）
+      - ./database/init/schema_full.sql:/docker-entrypoint-initdb.d/schema_full.sql:ro
+    networks:
+      - smartedu-network
+    healthcheck:
+      test: ["CMD", "mysqladmin", "ping", "-h", "localhost", "-u", "root", "-p${MYSQL_ROOT_PASSWORD:-SmartEdu@2024}"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 30s
+
+  # ------------------------------------------------------------
+  # Spring Boot 后端服务
+  # ------------------------------------------------------------
+  backend:
+    build:
+      context: ./smartedu-backend
+      dockerfile: Dockerfile
+    container_name: smartedu-backend
+    restart: always
+    environment:
+      SPRING_DATASOURCE_URL: jdbc:mysql://mysql:3306/${MYSQL_DATABASE:-smartedu_platform}?useUnicode=true&characterEncoding=utf8&useSSL=false&serverTimezone=Asia/Shanghai&allowPublicKeyRetrieval=true
+      SPRING_DATASOURCE_USERNAME: ${MYSQL_USER:-smartedu}
+      SPRING_DATASOURCE_PASSWORD: ${MYSQL_PASSWORD:-SmartEdu@2024}
+      FILE_UPLOAD_DIR: /app/uploads
+      JWT_SECRET: ${JWT_SECRET:-SmartEduPlatformSecretKey2024VeryLongSecretKeyForJwtToken}
+      AI_API_KEY: ${AI_API_KEY:-}
+      AI_MODEL: ${AI_MODEL:-doubao-seed-2.0-pro}
+      SERVER_PORT: 8080
+    ports:
+      - "8080:8080"
+    volumes:
+      # 文件上传目录挂载
+      - ./uploads:/app/uploads
+    depends_on:
+      mysql:
+        condition: service_healthy
+    networks:
+      - smartedu-network
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8080/api/actuator/health"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 60s
+
+  # ------------------------------------------------------------
+  # Nginx 前端服务
+  # ------------------------------------------------------------
+  nginx:
+    build:
+      context: ./smartedu-ui
+      dockerfile: Dockerfile
+    container_name: smartedu-nginx
+    restart: always
+    ports:
+      - "80:80"
+    volumes:
+      # 共享上传目录，用于直接访问上传的文件
+      - ./uploads:/usr/share/nginx/html/uploads:ro
+    depends_on:
+      - backend
+    networks:
+      - smartedu-network
+
+# ------------------------------------------------------------
+# 网络配置
+# ------------------------------------------------------------
+networks:
+  smartedu-network:
+    driver: bridge
