@@ -5,9 +5,12 @@
 ```
 database/
 ├── init/
-│   └── schema_full.sql        # 权威全量初始化脚本（建库 + 25 张表 + 种子数据）
+│   └── schema_full.sql        # 权威全量初始化脚本（建库 + 30 张表 + 种子数据）
+├── migrations/
+│   └── 001_...sql             # 增量迁移脚本（按序号执行）
 └── test/
-    └── homework_test_data.sql # 作业模块演示/测试数据
+    ├── homework_test_data.sql # 作业模块演示/测试数据
+    └── demo_data.sql          # 全功能演示数据（student001 + teacher001 双视角）
 ```
 
 ## 使用说明
@@ -23,10 +26,13 @@ mysql -u root -p < database/init/schema_full.sql
 `docker-compose.yml` 已将 `database/init/schema_full.sql` 挂载到 MySQL 容器的
 `/docker-entrypoint-initdb.d/`，首次 `docker-compose up -d` 时自动执行，无需手动导入。
 
-### 导入测试数据（可选）
+### 导入演示数据（可选）
 ```bash
-mysql -u root -p smartedu_platform < database/test/homework_test_data.sql
+mysql -u root -p smartedu_platform < database/test/demo_data.sql
 ```
+以 student001（张三）与 teacher001（王老师）双视角生成覆盖全部功能的演示数据：
+作业与提交、学情分析、教师提醒、问答、视频投稿与收藏、错题本、学习计划、
+AI 使用记录、课堂评估、学习资源。日期相对当前时间生成，可重复导入。
 
 ## 维护约定
 
