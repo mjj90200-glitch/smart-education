@@ -12,8 +12,10 @@ import org.springframework.web.client.RestTemplate;
 import java.io.File;
 import java.io.IOException;
 import java.nio.file.Files;
+import java.nio.file.Path;
 import java.nio.file.Paths;
 import java.util.*;
+import java.util.regex.Pattern;
 
 /**
  * 阿里云百炼 AI 作业批改服务 - 简化版
@@ -111,38 +113,66 @@ public class AIGradeService {
     }
 
     /**
-     * 读取文件内容
+     * 读取文件内容（路径经白名单校验，仅限项目 uploads/ 目录内，防止路径穿越）
      */
     private String readFileContent(String filePath) {
+        File file = resolveWithin(filePath);
+        if (file == null) {
+            logger.warn("拒绝非法或越界的文件路径：{}", filePath);
+            return "[非法文件路径]";
+        }
         try {
-            // 获取项目根目录
-            String baseDir = System.getProperty("user.dir");
-            String fullPath = baseDir + filePath;
+            byte[] bytes = Files.readAllBytes(file.toPath());
+            String content = new String(bytes, "UTF-8");
 
-            File file = new File(fullPath);
-            if (file.exists()) {
-                byte[] bytes = Files.readAllBytes(Paths.get(fullPath));
-                String content = new String(bytes, "UTF-8");
-
-                // 限制内容长度
-                if (content.length() > 5000) {
-                    content = content.substring(0, 5000) + "\n\n[内容过长，已截断]";
-                }
-                return content;
+            // 限制内容长度
+            if (content.length() > 5000) {
+                content = content.substring(0, 5000) + "\n\n[内容过长，已截断]";
             }
-
-            // 尝试直接从路径读取（可能是绝对路径）
-            file = new File(filePath);
-            if (file.exists()) {
-                byte[] bytes = Files.readAllBytes(Paths.get(filePath));
-                return new String(bytes, "UTF-8");
-            }
-
-            return "[文件不存在，无法读取内容]";
-
+            return content;
         } catch (IOException e) {
             logger.error("读取文件失败：{}", e.getMessage());
             return "[读取文件失败：" + e.getMessage() + "]";
+        }
+    }
+
+    /** 提交文件的合法相对路径：仅允许 uploads/ 目录下由常规文件名字符组成的路径 */
+    private static final Pattern SAFE_FILE_PATH = Pattern.compile(
+        "^/?uploads/[A-Za-z0-9_\\-][A-Za-z0-9_\\-./]{0,200}$"
+    );
+
+    /**
+     * 将请求路径限制在项目根目录内，防止路径穿越：
+     * 1) 白名单正则校验（仅 uploads/ 下常规文件名，显式拒绝 ".."）
+     * 2) 按路径分段解析，逐段拼接到真实基准目录
+     * 3) toRealPath + startsWith 最终边界校验
+     */
+    private File resolveWithin(String relativePath) {
+        if (relativePath == null || relativePath.isBlank()) {
+            return null;
+        }
+        String cleaned = relativePath.replace('\\', '/');
+        if (cleaned.contains("..") || !SAFE_FILE_PATH.matcher(cleaned).matches()) {
+            return null;
+        }
+        try {
+            Path base = Paths.get(System.getProperty("user.dir")).toRealPath();
+            Path target = base;
+            for (String part : cleaned.split("/")) {
+                if (part.isEmpty() || ".".equals(part)) {
+                    continue;
+                }
+                if ("..".equals(part) || !part.matches("[A-Za-z0-9_.\\-]+")) {
+                    return null;
+                }
+                target = target.resolve(part);
+            }
+            if (!target.startsWith(base) || !Files.isRegularFile(target)) {
+                return null;
+            }
+            return target.toFile();
+        } catch (IOException e) {
+            return null;
         }
     }
 
